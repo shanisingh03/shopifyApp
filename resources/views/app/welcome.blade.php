@@ -4,7 +4,7 @@
 
 <!-- Content Goes here -->
 
-<h1 class="w3-center">Welcome TO Social Share Shopify App.</h1>
+<h1 class="w3-center">Welcome TO Shopify App.</h1>
 
 <!-- Statistics -->
 <div class="panel panel-success">

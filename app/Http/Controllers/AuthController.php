@@ -42,7 +42,8 @@ class AuthController extends Controller
 					
 				}else{
 					#Create Charge
-					$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>env("APP_URL", "https://690f422e.ngrok.io").'shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
+					$access_token = ShopifyStore::where('shop',$shop)->value('token');
+					$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => env("CHARGE_NAME", "App Charge"),'price'=>env("CHARGE_AMOUNT", "0.0"),'return_url'=>env("APP_URL", "https://690f422e.ngrok.io").'shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
 
 					return View::make('app.billable')->with('url',$charge['confirmation_url']);
 
@@ -193,7 +194,7 @@ class AuthController extends Controller
     		} else {
     			# Give Message That You Declined The Charge.
     			// return "You Declined The Charge; Hell".$charge_id;
-    			return View::make('app.error')->with('msg','You Declined The Charge We Can Not Process Without Payment.');
+    			return View::make('app.error')->with('msg','You Declined The Charge We Can Not Process Without Payment.')->with('shop',$shop);
     		}
     		
 

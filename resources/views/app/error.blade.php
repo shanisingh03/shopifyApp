@@ -5,6 +5,13 @@
 	<link href="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.min.css" rel="stylesheet" id="bootstrap-css">
 	<script src="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js"></script>
 	<script src="//code.jquery.com/jquery-1.11.1.min.js"></script>
+  <script src="https://cdn.shopify.com/s/assets/external/app.js"></script>
+  <script type="text/javascript">
+      ShopifyApp.init({
+        apiKey: '{{env("SHOPIFY_APIKEY")}}',
+        shopOrigin: 'https://{{$shop}}'
+      });
+  </script>
 	<!------ Include the above in your HEAD tag ---------->
 	<style type="text/css">
 		  .center {text-align: center; margin-left: auto; margin-right: auto; margin-bottom: auto; margin-top: auto;}
