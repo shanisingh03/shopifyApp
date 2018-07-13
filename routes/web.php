@@ -14,6 +14,7 @@
 
 // Deafault View
 Route::get('/', 'AuthController@index')->name('app.auth');
+
 Route::get('/home/{shop}', 'AuthController@home')->name('app.home');
 
 // Install The App

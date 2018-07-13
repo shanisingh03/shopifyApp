@@ -7,6 +7,7 @@ use View;
 use Oseintow\Shopify\Facades\Shopify;
 use App\ShopifyStore;
 use App\Shop;
+use App\Helpers\AppHelper;
 
 class AuthController extends Controller
 {
@@ -18,57 +19,37 @@ class AuthController extends Controller
     	if ($shop) {
     		#Check For Valid Token
     		$shop_id = ShopifyStore::where('shop',$shop)->value('id');
-		  	$access_token = ShopifyStore::where('shop',$shop)->value('token');
-			$shop_data = Shopify::setShopUrl($shop)->setAccessToken($access_token)->get("admin/shop.json");
+		  	
+			$shop_data = AppHelper::isValidShopToken($shop);
 			
 			if ($shop_data) {
 				#Check For Charge 
     			$is_charged = Shop::where('shopify_domain',$shop)->first();
 
     			if ($is_charged) {
-						# Check For Activated Charge
-						if ($is_charged->activated == 1) {
-							# Activated Return To Dashboard
-							return View::make('app.welcome')->with(['shop'=>$shop]);
-						} else {
-							# Activate And Return TO Dashboard
-							$charge_id = $is_charged->charge_id;
-							$access_token = ShopifyStore::where('shop',$shop)->value('token');
-							$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->get("/admin/recurring_application_charges/".$charge_id.".json");
-							
-							if ($charge['activated_on'] != null) {
-								# Check For Shop Status And Update Accordingly
-								$is_shop_activated = Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->value('activated');
-								if ($is_shop_activated == 0) {
-									# Activate Shop In DB
-									Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->update(['activated'=>1]);
-								} 
-								return View::make('app.welcome')->with(['shop'=>$shop]);
-							}else{
-								#Activate Charge And Update Status
-								$activated_charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges/".$charge_id."/activate.json");
-								if ($activated_charge['activated_on'] != null) {
-									# update Status of Shop
-									Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->update(['activated'=>1]);
-									return View::make('app.welcome')->with(['shop'=>$shop]);
-			
-								}
-							}
-
-							
-							
-						}
+					# Check For Activated Charge
+					if ($is_charged->activated == 1) {
+						# Activated Return To Dashboard
+						return View::make('app.welcome')->with(['shop'=>$shop]);
+					} else {
+						# Activate And Return TO Dashboard
+						$charge_id = $is_charged->charge_id;
+						$activate_charge = AppHelper::ActivateCharge($shop,$charge_id);
+						return View::make('app.welcome')->with(['shop'=>$shop]);
 						
-    					
-    				}else{
-    					#Create Charge
-    					$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>'https://07fe69bb.ngrok.io/shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
-    					return View::make('app.billable')->with('url',$charge['confirmation_url']);
+					}
+					
+					
+				}else{
+					#Create Charge
+					$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>env("APP_URL", "https://690f422e.ngrok.io").'shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
 
-    				}
+					return View::make('app.billable')->with('url',$charge['confirmation_url']);
+
+				}
 			} else {
 				# Display Error Page 
-				return "Invalid Access";
+				return View::make('app.error')->with('msg','Invalid Access Of Store');
 			}
     	}else{
 	    	# Check For Shop and Login
@@ -83,7 +64,7 @@ class AuthController extends Controller
     	$shopUrl = $request->shop;
 	    $scope = ['read_products', 'write_products', 'read_customers', 'write_customers', 'read_orders', 'write_orders','read_draft_orders','write_draft_orders','read_script_tags', 'write_script_tags'];
 
-	    $redirectUrl = "https://07fe69bb.ngrok.io/shanisinghProjects/shopifyApp/callback";
+	    $redirectUrl = env("APP_URL", "https://690f422e.ngrok.io")."shanisinghProjects/shopifyApp/callback";
 
 
 	    $shopify = Shopify::setShopUrl($shopUrl);
@@ -109,78 +90,40 @@ class AuthController extends Controller
 
 			#Create Charge
 			$access_token = ShopifyStore::where('shop',$shop)->value('token');
-			$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>'https://07fe69bb.ngrok.io/shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
+			$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>env("APP_URL", "https://690f422e.ngrok.io").'shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
     		return View::make('app.billable')->with('url',$charge['confirmation_url']);
+
 		}else{
 			#Go To Store
-			try {
-					$shop = $request->shop;
-				  	$access_token = ShopifyStore::where('shop',$shop)->value('token');
-    				$shop_data = Shopify::setShopUrl($shop)->setAccessToken($access_token)->get("admin/shop.json");
-    				$is_charged = Shop::where('shopify_domain',$shop)->first();
+			$shop = $request->shop;
+			
+			$accessToken = Shopify::setShopUrl($request->shop)->getAccessToken($request->code);
+			
+			$shopify =  ShopifyStore::where('shop',$shop)->first();
+			$shopify->code = $request->code;
+			$shopify->hmac = $request->hmac;
+			$shopify->timestamp = $request->timestamp;
+			$shopify->token = $accessToken;
+			$shopify->save();
 
-	    			if ($is_charged) {
-	    				$shop_id = ShopifyStore::where('shop',$shop)->value('id');
-							# Check For Activated Charge
-							if ($is_charged->activated == 1) {
-								# Activated Return To Dashboard
-								return View::make('app.welcome')->with(['shop'=>$shop]);
-							} else {
-								# Activate And Return TO Dashboard
-								$charge_id = $is_charged->charge_id;
-								$access_token = ShopifyStore::where('shop',$shop)->value('token');
-								$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->get("/admin/recurring_application_charges/".$charge_id.".json");
-								
-								if ($charge['activated_on'] != null) {
-									# Check For Shop Status And Update Accordingly
-									$is_shop_activated = Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->value('activated');
-									if ($is_shop_activated == 0) {
-										# Activate Shop In DB
-										Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->update(['activated'=>1]);
-									} 
-									return View::make('app.welcome')->with(['shop'=>$shop]);
-								}else{
-									#Activate Charge And Update Status
-									$activated_charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges/".$charge_id."/activate.json");
-									if ($activated_charge['activated_on'] != null) {
-										# update Status of Shop
-										Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->update(['activated'=>1]);
-										return View::make('app.welcome')->with(['shop'=>$shop]);
+		  	$access_token = ShopifyStore::where('shop',$shop)->value('token');
+			
+			$is_charged = Shop::where('shopify_domain',$shop)->first();
+
+			if ($is_charged) {
+				$shop_id = ShopifyStore::where('shop',$shop)->value('id');
+				# Check For Activated Charge
+				Shop::where('shop_id',$shop_id)->delete();
+			}
+
+			#Create Charge
+			$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>env("APP_URL", "https://690f422e.ngrok.io").'shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
+			return View::make('app.billable')->with('url',$charge['confirmation_url']);
 				
-									}
-								}
-
-								
-								
-							}
-							
-	    					
-	    				}else{
-	    					#Create Charge
-	    					$charge = Shopify::setShopUrl($shop)->setAccessToken($access_token)->post("/admin/recurring_application_charges.json",["recurring_application_charge"=>['name' => 'Test App With Charge','price'=>10.0,'return_url'=>'https://07fe69bb.ngrok.io/shanisinghProjects/shopifyApp/billable/?shop='.$shop,'test'=>true]]);
-	    					return View::make('app.billable')->with('url',$charge['confirmation_url']);
-
-	    				}
-				}
-			catch (\Exception $e) 
-				{
-				    // return $e->getMessage();
-				    $accessToken = Shopify::setShopUrl($request->shop)->getAccessToken($request->code);
-					$shopify = ShopifyStore::where('shop',$request->shop)->first();
-					$shopify->shop = $request->shop;
-					$shopify->code = $request->code;
-					$shopify->hmac = $request->hmac;
-					$shopify->timestamp = $request->timestamp;
-					$shopify->token = $accessToken;
-
-					$shopify->save();
-				}
-			
-			
 		}
 	}
 
-	// Billable
+	// Billable Of App
 	public function Billable(Request $request)
 	{
 		# Charge Application
@@ -241,7 +184,6 @@ class AuthController extends Controller
 						# update Status of Shop
 						Shop::where('shop_id',$shop_id)->where('charge_id',$charge_id)->update(['activated'=>1]);
 						
-						// return View::make('app.welcome')->with(['shop'=>$shop]);
 						return redirect()->route('app.home',['shop'=>$shop]);
 
 					}
@@ -250,7 +192,8 @@ class AuthController extends Controller
 
     		} else {
     			# Give Message That You Declined The Charge.
-    			return "You Declined The Charge; Hell".$charge_id;
+    			// return "You Declined The Charge; Hell".$charge_id;
+    			return View::make('app.error')->with('msg','You Declined The Charge We Can Not Process Without Payment.');
     		}
     		
 
